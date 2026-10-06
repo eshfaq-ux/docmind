@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -22,17 +21,44 @@ interface ConversationListProps {
   onNew: () => void;
 }
 
+const POLL_INTERVAL_MS = 30_000;
+
 export function ConversationList({ kbId, activeConversationId, onNew }: ConversationListProps) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/conversations?kbId=${kbId}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setConvs)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const fetchConvs = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      const r = await fetch(`/api/conversations?kbId=${kbId}`);
+      if (r.ok) setConvs(await r.json());
+    } catch {
+      // silently ignore background poll failures
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [kbId]);
+
+  // Initial load
+  useEffect(() => { fetchConvs(); }, [fetchConvs]);
+
+  // Poll every 30s + refresh on window focus
+  useEffect(() => {
+    const interval = setInterval(() => fetchConvs(true), POLL_INTERVAL_MS);
+    const onFocus = () => fetchConvs(true);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchConvs]);
+
+  // Re-fetch when a new conversation is created (activeConversationId changes)
+  useEffect(() => {
+    if (activeConversationId) fetchConvs(true);
+  }, [activeConversationId, fetchConvs]);
 
   async function deleteConversation(id: string, e: React.MouseEvent) {
     e.preventDefault();
@@ -54,13 +80,25 @@ export function ConversationList({ kbId, activeConversationId, onNew }: Conversa
         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
           Conversations
         </span>
-        <button
-          onClick={onNew}
-          className="w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.06] transition-all duration-150"
-          title="New conversation"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => fetchConvs()}
+            disabled={refreshing}
+            className="w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground hover:bg-white/[0.06] transition-all duration-150 disabled:opacity-30"
+            title="Refresh"
+            aria-label="Refresh conversation list"
+          >
+            <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
+          </button>
+          <button
+            onClick={onNew}
+            className="w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.06] transition-all duration-150"
+            title="New conversation"
+            aria-label="New conversation"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* List */}
@@ -110,6 +148,7 @@ export function ConversationList({ kbId, activeConversationId, onNew }: Conversa
                 onClick={(e) => deleteConversation(conv.id, e)}
                 className="shrink-0 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-rose-400 transition-all duration-150"
                 title="Delete"
+                aria-label={`Delete: ${conv.title ?? "New conversation"}`}
               >
                 <Trash2 className="w-3 h-3" />
               </button>

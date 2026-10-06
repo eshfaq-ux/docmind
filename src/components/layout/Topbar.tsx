@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +28,7 @@ function formatBytes(b: number): string {
 
 export function Topbar({ storageBytes = 0, storageLimitBytes = 500 * 1024 * 1024 }: TopbarProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const pct = Math.min((storageBytes / storageLimitBytes) * 100, 100);
   const isCritical = pct > 85;
   const isWarning = pct > 65 && !isCritical;
@@ -95,10 +97,16 @@ export function Topbar({ storageBytes = 0, storageLimitBytes = 500 * 1024 * 1024
             <p className="text-[11px] text-muted-foreground truncate mt-0.5">{session?.user?.email}</p>
           </div>
           <DropdownMenuSeparator className="bg-white/[0.06] my-1" />
-          <DropdownMenuItem className="rounded-lg px-2.5 py-2 text-[13px] gap-2.5 cursor-pointer hover:bg-white/[0.07] focus:bg-white/[0.07]">
+          <DropdownMenuItem
+            className="rounded-lg px-2.5 py-2 text-[13px] gap-2.5 cursor-pointer hover:bg-white/[0.07] focus:bg-white/[0.07]"
+            onClick={() => router.push("/profile")}
+          >
             <User className="w-3.5 h-3.5 text-muted-foreground" /> Profile
           </DropdownMenuItem>
-          <DropdownMenuItem className="rounded-lg px-2.5 py-2 text-[13px] gap-2.5 cursor-pointer hover:bg-white/[0.07] focus:bg-white/[0.07]">
+          <DropdownMenuItem
+            className="rounded-lg px-2.5 py-2 text-[13px] gap-2.5 cursor-pointer hover:bg-white/[0.07] focus:bg-white/[0.07]"
+            onClick={() => router.push("/settings")}
+          >
             <Settings className="w-3.5 h-3.5 text-muted-foreground" /> Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-white/[0.06] my-1" />

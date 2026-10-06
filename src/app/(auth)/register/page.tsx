@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,13 +36,13 @@ const REQUIREMENTS = [
 ];
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw]     = useState(false);
   const [loading, setLoading]   = useState(false);
   const [pwFocused, setPwFocused] = useState(false);
+  const [done, setDone]         = useState(false);  // email sent state
 
   const strength = getPasswordStrength(password);
   const isPasswordValid = strength.score >= 2 && password.length >= 8;
@@ -64,22 +62,44 @@ export default function RegisterPage() {
     });
 
     const data = await res.json();
+    setLoading(false);
 
     if (!res.ok) {
-      setLoading(false);
       toast.error(data.error ?? "Registration failed");
       return;
     }
 
-    const result = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
+    // Show "check your email" screen
+    setDone(true);
+  }
 
-    if (result?.error) {
-      toast.success("Account created! Please sign in.");
-      router.push("/login");
-    } else {
-      router.push("/");
-    }
+  // ── Email sent confirmation screen ──────────────────────────────────────────
+  if (done) {
+    return (
+      <div className="glass rounded-2xl p-8 space-y-6 text-center animate-scale-in">
+        <div className="flex justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Sparkles className="w-6 h-6 text-primary" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <h1 className="font-heading text-xl font-bold">Check your email</h1>
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            We sent a verification link to <strong className="text-foreground">{email}</strong>.
+            Click the link to activate your account.
+          </p>
+          <p className="text-[12px] text-muted-foreground/50 mt-1">
+            The link expires in 24 hours. Check your spam folder if you don&apos;t see it.
+          </p>
+        </div>
+        <p className="text-center text-[12.5px] text-muted-foreground">
+          Already verified?{" "}
+          <Link href="/login" className="text-primary hover:text-primary/80 font-medium transition-colors duration-150">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (

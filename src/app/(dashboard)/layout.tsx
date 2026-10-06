@@ -11,11 +11,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await auth();
   if (!session) redirect("/login");
 
-  // Load tenant storage info for topbar
-  const tenant = await db.query.tenants.findFirst({
-    where: eq(tenants.id, session.user.tenantId),
-    columns: { storageBytes: true },
-  });
+  // Load tenant storage info for topbar.
+  // Retry once — Neon free-tier branches can time out on cold-start wake.
+  let tenant: { storageBytes: number } | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, session.user.tenantId),
+        columns: { storageBytes: true },
+      });
+      break;
+    } catch (err) {
+      if (attempt === 1) throw err; // surface on second failure
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
 
   return (
     <SessionProvider session={session}>

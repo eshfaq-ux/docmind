@@ -44,6 +44,10 @@ const schema = z.object({
   // Misc
   CRON_SECRET: z.string().min(32).optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+
+  // Email (Resend) — optional; if not set, verification links are logged to console
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().email().optional().default("noreply@docmind.app"),
 });
 
 type Env = z.infer<typeof schema>;

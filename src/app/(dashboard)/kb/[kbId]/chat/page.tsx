@@ -128,24 +128,41 @@ export default function KBChatPage() {
 
         {/* Chat area */}
         <div className="flex-1 min-w-0 relative">
-          {kb ? (
+          {kb === null ? (
+            // Loading state
+            <div className="flex items-center justify-center h-full">
+              <div className="space-y-3 w-full max-w-md px-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-12 rounded-2xl shimmer bg-white/[0.03]" style={{ opacity: 1 - i * 0.2 }} />
+                ))}
+              </div>
+            </div>
+          ) : kb.docCount === 0 ? (
+            // Empty KB guard — no documents uploaded yet
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-5 px-6">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                <FileText className="w-6 h-6 text-amber-400/80" />
+              </div>
+              <div className="space-y-1.5 max-w-sm">
+                <p className="font-semibold text-[15px]">No documents yet</p>
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
+                  Upload at least one document to start chatting. The AI can only answer questions based on your uploaded content.
+                </p>
+              </div>
+              <Link
+                href={`/kb/${kbId}`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/15 border border-primary/25 text-primary text-[13px] font-medium hover:bg-primary/25 transition-colors duration-150"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Upload documents
+              </Link>
+            </div>
+          ) : (
             <ChatWindow
               kbId={kbId}
               kbName={kb.name}
               initialConversationId={activeConvId}
             />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="space-y-3 w-full max-w-md px-4">
-                {[...Array(4)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-12 rounded-2xl shimmer bg-white/[0.03]"
-                    style={{ opacity: 1 - i * 0.2 }}
-                  />
-                ))}
-              </div>
-            </div>
           )}
         </div>
       </div>

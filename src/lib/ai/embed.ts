@@ -1,10 +1,10 @@
 import OpenAI from "openai";
 import { env } from "@/lib/env";
 
-// OpenAI client — kept for chat fallback
+// OpenAI client — for fallback
 export const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-// OpenRouter client — used for chat completions
+// OpenRouter client — used for chat completions (free tier)
 export const chatClient = env.OPENROUTER_API_KEY
   ? new OpenAI({
       apiKey: env.OPENROUTER_API_KEY,
@@ -19,16 +19,16 @@ export const chatClient = env.OPENROUTER_API_KEY
 // ─── Model constants ──────────────────────────────────────────────────────────
 export const EMBED_MODEL = "nomic-embed-text";
 export const CHAT_MODEL = env.OPENROUTER_API_KEY
-  ? "meta-llama/llama-3.1-8b-instruct:free"
+  ? "openrouter/auto"
   : "gpt-4o-mini";
 
 const OLLAMA_URL = "http://localhost:11434/api/embeddings";
 
-// Pricing (local Ollama = free)
+// Pricing per 1M tokens (USD)
 const PRICING: Record<string, { input: number; output: number }> = {
   "nomic-embed-text": { input: 0, output: 0 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
-  "meta-llama/llama-3.1-8b-instruct:free": { input: 0, output: 0 },
+  "openrouter/auto": { input: 0, output: 0 },
 };
 
 export function estimateCostUsd(

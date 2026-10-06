@@ -43,27 +43,50 @@ export function UploadZone({ kbId, onUploaded }: UploadZoneProps) {
     setUploading((p) => [...p, { id, name: file.name, size: file.size, progress: 0 }]);
 
     try {
-      // Step 1: Upload file via server proxy (avoids CORS issues with B2/R2)
+      // Step 1: Upload via server proxy with real XHR progress tracking
       const formData = new FormData();
       formData.append("file", file);
       formData.append("kbId", kbId);
 
-      const uploadRes = await fetch("/api/upload-proxy", {
-        method: "POST",
-        body: formData,
+      const documentId = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            // Map upload progress to 0–80% range (remaining 80–100% = finalize + ingest trigger)
+            const pct = Math.round((e.loaded / e.total) * 80);
+            setUploading((p) => p.map((f) => f.id === id ? { ...f, progress: pct } : f));
+          }
+        });
+
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText) as { documentId?: string; error?: string };
+              if (data.documentId) resolve(data.documentId);
+              else reject(new Error(data.error ?? "Upload failed"));
+            } catch {
+              reject(new Error("Invalid server response"));
+            }
+          } else {
+            try {
+              const err = JSON.parse(xhr.responseText) as { error?: string };
+              reject(new Error(err.error ?? `HTTP ${xhr.status}`));
+            } catch {
+              reject(new Error(`HTTP ${xhr.status}`));
+            }
+          }
+        });
+
+        xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
+        xhr.addEventListener("abort", () => reject(new Error("Upload cancelled")));
+
+        xhr.open("POST", "/api/upload-proxy");
+        xhr.send(formData);
       });
 
-      setUploading((p) => p.map((f) => f.id === id ? { ...f, progress: 80 } : f));
-
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? "Upload failed");
-      }
-
-      const { documentId } = await uploadRes.json();
-
-      // Step 2: Trigger ingestion
-      setUploading((p) => p.map((f) => f.id === id ? { ...f, progress: 95 } : f));
+      // Step 2: Finalize — trigger ingestion
+      setUploading((p) => p.map((f) => f.id === id ? { ...f, progress: 90 } : f));
       const finalizeRes = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -176,14 +199,19 @@ export function UploadZone({ kbId, onUploaded }: UploadZoneProps) {
                 {f.error ? (
                   <p className="text-[11px] text-rose-400">{f.error}</p>
                 ) : (
-                  <div className="h-[3px] w-full rounded-full bg-white/[0.08] overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-300",
-                        f.done ? "bg-emerald-400" : "bg-primary"
-                      )}
-                      style={{ width: `${f.progress}%` }}
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-[3px] rounded-full bg-white/[0.08] overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-300",
+                          f.done ? "bg-emerald-400" : "bg-primary"
+                        )}
+                        style={{ width: `${f.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/50 tabular-nums w-7 text-right shrink-0">
+                      {f.done ? "✓" : `${f.progress}%`}
+                    </span>
                   </div>
                 )}
               </div>
