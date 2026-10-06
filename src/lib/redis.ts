@@ -31,6 +31,13 @@ export const uploadRatelimit = new Ratelimit({
   prefix: "rl:upload",
 });
 
+/** Login: 10 attempts per 15 minutes per IP — brute-force protection */
+export const loginRatelimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "15 m"),
+  prefix: "rl:login",
+});
+
 // ─── Conversation memory helpers ─────────────────────────────────────────────
 
 const MAX_TURNS = 10;

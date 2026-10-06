@@ -265,15 +265,16 @@ export async function POST(req: Request) {
         }
 
         if (!fullContent.trim()) {
+          // Log server-side only — never expose to client
           console.warn("[chat] WARNING: fullContent is empty after stream");
-        } else {
-          console.log("[chat] fullContent ok, length:", fullContent.length, "preview:", JSON.stringify(fullContent.slice(0, 120)));
         }
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : "Generation failed";
+        // Log the real error server-side for debugging
+        console.error("[chat] stream error:", err instanceof Error ? err.message : err);
+        // Send a generic message to the client — never leak internal error details
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "error", message: errMsg })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ type: "error", message: "An error occurred while generating the response. Please try again." })}\n\n`)
         );
       } finally {
         clearInterval(heartbeat);

@@ -20,9 +20,9 @@ interface KB {
 }
 
 const NAV = [
-  { href: "/",          icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/analytics", icon: BarChart3,        label: "Analytics" },
-  { href: "/eval",      icon: FlaskConical,      label: "Evaluation" },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/analytics",  icon: BarChart3,       label: "Analytics" },
+  { href: "/eval",       icon: FlaskConical,     label: "Evaluation" },
 ];
 
 export function Sidebar() {
@@ -51,7 +51,7 @@ export function Sidebar() {
       {/* Main nav */}
       <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
         {NAV.map(({ href, icon: Icon, label }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
           return (
             <Link
               key={href}

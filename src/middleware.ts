@@ -14,6 +14,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   const publicPaths = [
+    "/",
     "/login",
     "/register",
     "/verify-email",
@@ -29,9 +30,9 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect authenticated users away from auth pages
-  if (req.auth && (pathname === "/login" || pathname === "/register")) {
-    return NextResponse.redirect(new URL("/", req.url));
+  // Redirect authenticated users away from auth pages and marketing root
+  if (req.auth && (pathname === "/login" || pathname === "/register" || pathname === "/")) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return NextResponse.next();

@@ -4,24 +4,26 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { Errors } from "@/lib/api-error";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(128),
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password is too long"),
 });
 
 /** PATCH /api/profile/password — change password */
 export async function PATCH(req: Request) {
   const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return Errors.unauthorized();
 
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
-  }
+  if (!parsed.success) return Errors.validation(parsed.error.issues[0].message);
 
   const user = await db.query.users.findFirst({
     where: eq(users.id, session.user.id),
@@ -29,19 +31,19 @@ export async function PATCH(req: Request) {
   });
 
   if (!user?.hashedPassword) {
-    return NextResponse.json(
-      { error: "Password authentication is not available for your account" },
-      { status: 400 }
-    );
+    return Errors.validation("Password authentication is not available for your account");
   }
 
   const { verify, hash } = await import("@node-rs/argon2");
   const valid = await verify(user.hashedPassword, parsed.data.currentPassword);
   if (!valid) {
-    return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
+    return Errors.validation("Current password is incorrect");
   }
 
-  const hashedPassword = await hash(parsed.data.newPassword, { timeCost: 2, memoryCost: 65536 });
+  const hashedPassword = await hash(parsed.data.newPassword, {
+    timeCost: 2,
+    memoryCost: 65536,
+  });
 
   await db.update(users)
     .set({ hashedPassword })

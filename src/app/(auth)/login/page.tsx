@@ -14,14 +14,27 @@ import { cn } from "@/lib/utils";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const rawCallback = searchParams.get("callbackUrl") ?? "/";
+  // Prevent open redirect: only allow relative paths starting with /
+  const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
 
-  const [email, setEmail]               = useState("");
-  const [password, setPassword]         = useState("");
-  const [showPw, setShowPw]             = useState(false);
-  const [loading, setLoading]           = useState(false);
+  const [email, setEmail]                 = useState("");
+  const [password, setPassword]           = useState("");
+  const [showPw, setShowPw]               = useState(false);
+  const [loading, setLoading]             = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [emailError, setEmailError]     = useState("");
+
+  // Field-level errors
+  const [emailError, setEmailError]       = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  // Form-level (generic) error shown in a banner above the submit button
+  const [formError, setFormError]         = useState("");
+
+  function clearErrors() {
+    setEmailError("");
+    setPasswordError("");
+    setFormError("");
+  }
 
   async function handleGoogleSignIn() {
     setGoogleLoading(true);
@@ -30,22 +43,67 @@ export default function LoginPage() {
 
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
-    setEmailError("");
+    clearErrors();
+
+    // Client-side sanity check before hitting the server
+    if (!email) { setEmailError("Email is required"); return; }
+    if (!password) { setPasswordError("Password is required"); return; }
+
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      // Pre-flight: rate limit + unverified email detection
+      const preflight = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    setLoading(false);
+      if (!preflight.ok) {
+        const data = await preflight.json().catch(() => ({})) as {
+          error?: string;
+          code?: string;
+        };
 
-    if (result?.error) {
-      setEmailError("Invalid email or password");
-      toast.error("Invalid email or password");
-    } else {
-      router.push(callbackUrl);
+        switch (data.code) {
+          case "RATE_LIMIT":
+            setFormError(data.error ?? "Too many attempts. Try again later.");
+            break;
+          case "EMAIL_NOT_VERIFIED":
+            setEmailError("Please verify your email before signing in.");
+            break;
+          case "INVALID_CREDENTIALS":
+            // Keep both fields red but only one message to avoid leaking which is wrong
+            setEmailError("Invalid email or password");
+            setPasswordError(" "); // non-empty to trigger red border, no visible text
+            break;
+          case "VALIDATION_ERROR":
+            setFormError(data.error ?? "Please check your input.");
+            break;
+          default:
+            setFormError("Something went wrong. Please try again.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Pre-flight passed — now actually sign in via NextAuth
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        // NextAuth returned an error despite pre-flight passing (edge case)
+        setFormError("Sign in failed. Please try again.");
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch {
+      setFormError("Network error. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -92,6 +150,17 @@ export default function LoginPage() {
 
       {/* Credentials form */}
       <form onSubmit={handleCredentials} className="space-y-4" noValidate>
+
+        {/* Form-level error banner */}
+        {formError && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[12.5px] text-rose-400"
+          >
+            {formError}
+          </div>
+        )}
+
         {/* Email */}
         <div className="space-y-1.5">
           <Label htmlFor="email" className="text-[12px] text-muted-foreground font-medium">
@@ -103,7 +172,7 @@ export default function LoginPage() {
             autoComplete="email"
             placeholder="you@company.com"
             value={email}
-            onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
+            onChange={(e) => { setEmail(e.target.value); setEmailError(""); setFormError(""); }}
             required
             aria-invalid={!!emailError}
             aria-describedby={emailError ? "email-error" : undefined}
@@ -111,10 +180,10 @@ export default function LoginPage() {
               "h-10 bg-white/[0.04] border-white/[0.09] text-[13.5px]",
               "placeholder:text-muted-foreground/40 focus:ring-0 focus:border-primary/40",
               "transition-colors duration-150",
-              emailError && "border-rose-500/60"
+              emailError && "border-rose-500/60 focus:border-rose-500/60"
             )}
           />
-          {emailError && (
+          {emailError && emailError.trim() && (
             <p id="email-error" role="alert" className="text-[11.5px] text-rose-400 mt-1">
               {emailError}
             </p>
@@ -141,12 +210,14 @@ export default function LoginPage() {
               autoComplete="current-password"
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setPasswordError(""); setFormError(""); }}
               required
+              aria-invalid={!!passwordError && passwordError.trim() !== ""}
               className={cn(
                 "h-10 bg-white/[0.04] border-white/[0.09] text-[13.5px] pr-10",
                 "placeholder:text-muted-foreground/40 focus:ring-0 focus:border-primary/40",
-                "transition-colors duration-150"
+                "transition-colors duration-150",
+                passwordError && "border-rose-500/60 focus:border-rose-500/60"
               )}
             />
             <button
@@ -158,6 +229,11 @@ export default function LoginPage() {
               {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          {passwordError && passwordError.trim() && (
+            <p role="alert" className="text-[11.5px] text-rose-400 mt-1">
+              {passwordError}
+            </p>
+          )}
         </div>
 
         {/* Submit */}

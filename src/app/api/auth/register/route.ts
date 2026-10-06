@@ -8,6 +8,7 @@ import { redis } from "@/lib/redis";
 import { randomBytes, createHash } from "crypto";
 import { sendEmail, verificationEmailHtml } from "@/lib/email";
 import { env } from "@/lib/env";
+import { Errors } from "@/lib/api-error";
 
 // 5 registrations per hour per IP — prevents signup spam
 const registerRatelimit = new Ratelimit({
@@ -28,21 +29,11 @@ export async function POST(req: Request) {
   // Rate limit by IP
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const { success } = await registerRatelimit.limit(ip);
-  if (!success) {
-    return NextResponse.json(
-      { error: "Too many registration attempts. Please try again later.", code: "RATE_LIMIT" },
-      { status: 429 }
-    );
-  }
+  if (!success) return Errors.rateLimit();
 
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0].message, code: "VALIDATION_ERROR" },
-      { status: 400 }
-    );
-  }
+  if (!parsed.success) return Errors.validation(parsed.error.issues[0].message);
 
   const { name, email, password } = parsed.data;
 
@@ -50,9 +41,7 @@ export async function POST(req: Request) {
     where: eq(users.email, email),
     columns: { id: true },
   });
-  if (existing) {
-    return NextResponse.json({ error: "Email already registered", code: "CONFLICT" }, { status: 409 });
-  }
+  if (existing) return Errors.conflict("Email");
 
   const { hash } = await import("@node-rs/argon2");
   const hashedPassword = await hash(password, { timeCost: 2, memoryCost: 65536 });
