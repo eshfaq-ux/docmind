@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { documents, chunks, knowledgeBases } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { env } from "@/lib/env";
-import { clearHistory } from "@/lib/redis";
 
 export const runtime = "nodejs";
 

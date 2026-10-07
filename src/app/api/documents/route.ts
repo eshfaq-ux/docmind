@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents, knowledgeBases, tenants } from "@/lib/db/schema";
+import { documents, knowledgeBases } from "@/lib/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { z } from "zod";

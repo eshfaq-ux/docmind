@@ -4,13 +4,10 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { User, Mail, Shield, Calendar, Pencil, Check, X } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();

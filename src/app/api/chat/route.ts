@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { conversations, messages, citations, usageEvents } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { openai, chatClient, CHAT_MODEL, estimateCostUsd } from "@/lib/ai/embed";
+import { eq } from "drizzle-orm";
+import { chatClient, CHAT_MODEL, estimateCostUsd } from "@/lib/ai/embed";
 import { embedQuery } from "@/lib/ai/embed";
 import { vectorSearch, bm25Search } from "@/lib/search/retrieval";
 import { rrf, computeConfidence } from "@/lib/search/rrf";
@@ -105,10 +105,9 @@ export async function POST(req: Request) {
   }
 
   // Save user message
-  const [userMsg] = await db
+  await db
     .insert(messages)
-    .values({ conversationId, role: "user", content: message })
-    .returning({ id: messages.id });
+    .values({ conversationId, role: "user", content: message });
 
   // ── Retrieval ──────────────────────────────────────────────────────────────
   const queryEmbedding = await embedQuery(message);

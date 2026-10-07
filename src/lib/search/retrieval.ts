@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
-import { chunks } from "@/lib/db/schema";
-import { sql, eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export interface RetrievedChunk {
   id: string;

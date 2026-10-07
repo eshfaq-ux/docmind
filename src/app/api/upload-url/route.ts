@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
 import { getPresignedUploadUrl, buildR2Key, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from "@/lib/r2";
 import { uploadRatelimit } from "@/lib/redis";
 import { z } from "zod";

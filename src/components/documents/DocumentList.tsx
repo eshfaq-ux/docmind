@@ -3,10 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { StatusBadge } from "./StatusBadge";
 import { useDocumentStatus } from "@/hooks/useDocumentStatus";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
-  FileText, FileWarning, Trash2, RefreshCw,
+  FileWarning, Trash2, RefreshCw,
   ChevronDown, ChevronUp, File,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

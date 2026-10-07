@@ -13,13 +13,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Plus, BookOpen, MessageSquare, FileText,
   Trash2, ArrowRight, Layers, Clock,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface KB {
   id: string;

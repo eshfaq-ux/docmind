@@ -27,7 +27,8 @@ const LABELS: Record<string, string> = {
   none:   "No context",
 };
 
-const CustomTooltip = ({ active, payload }: any) => {
+interface TooltipProps { active?: boolean; payload?: { name: string; value: number }[] }
+const CustomTooltip = ({ active, payload }: TooltipProps) => {
   if (!active || !payload?.length) return null;
   const { name, value } = payload[0];
   return (

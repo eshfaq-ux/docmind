@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { evalDatasets, evalCases, evalRuns, evalResults, usageEvents } from "@/lib/db/schema";
+import { evalDatasets, evalRuns, evalResults, usageEvents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { openai, CHAT_MODEL, estimateCostUsd, embedQuery } from "@/lib/ai/embed";
 import { vectorSearch, bm25Search } from "@/lib/search/retrieval";

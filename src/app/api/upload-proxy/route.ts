@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { r2, buildR2Key, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from "@/lib/r2";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { uploadRatelimit } from "@/lib/redis";

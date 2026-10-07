@@ -251,62 +251,64 @@
    LANDING PAGE — all classes prefixed lp- to prevent collisions
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Google Fonts (Poppins heading + Open Sans body) ── */
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600&family=Poppins:wght@500;600;700;800&display=swap');
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300&display=swap');
 
 /* ── Root ── */
 .lp-root {
   isolation: isolate;
   position: relative;
   min-height: 100vh;
-  background: #0a0f1e;
+  background: #05060F;
   color: #f1f5f9;
   overflow-x: hidden;
 }
 
 /* ── Typography ── */
-.lp-font-heading { font-family: 'Poppins', system-ui, sans-serif; }
+.lp-font-display { font-family: 'Space Grotesk', system-ui, sans-serif; }
+.lp-font-body    { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+.lp-font-heading { font-family: 'Space Grotesk', system-ui, sans-serif; }
 .lp-h1 {
-  font-family: 'Poppins', system-ui, sans-serif;
-  font-size: clamp(2.4rem, 6vw, 4.2rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: clamp(2.6rem, 6.5vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.06;
   opacity: 0;
-  animation: lp-up 0.7s cubic-bezier(.22,1,.36,1) 100ms forwards;
+  animation: lp-up 0.8s cubic-bezier(.22,1,.36,1) 100ms forwards;
 }
 .lp-h1-cta {
-  font-family: 'Poppins', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: clamp(2.2rem, 5vw, 3.8rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
   line-height: 1.1;
 }
 .lp-h2 {
-  font-family: 'Poppins', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: clamp(1.8rem, 3.5vw, 2.8rem);
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.035em;
   line-height: 1.15;
 }
 .lp-h3 {
-  font-family: 'Poppins', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: clamp(1.4rem, 2.5vw, 1.9rem);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   line-height: 1.2;
 }
 .lp-h4 {
-  font-family: 'Poppins', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 1rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 .lp-body-lg {
-  font-family: 'Open Sans', system-ui, sans-serif;
-  font-size: 1.0625rem;
-  color: rgba(241,245,249,0.45);
-  line-height: 1.7;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 1.05rem;
+  color: rgba(241,245,249,0.42);
+  line-height: 1.75;
 }
 
 /* ── Gradient text ── */

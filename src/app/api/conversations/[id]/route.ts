@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { conversations, messages, citations } from "@/lib/db/schema";
+import { conversations, messages } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 
 export const runtime = "nodejs";

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Shield, Bell, Trash2, KeyRound, AlertTriangle,
-  Eye, EyeOff, Check, ChevronRight,
+  Eye, EyeOff, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

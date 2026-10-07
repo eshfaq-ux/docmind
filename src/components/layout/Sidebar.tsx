@@ -10,7 +10,6 @@ import {
   FlaskConical,
   BookOpen,
   Sparkles,
-  ChevronRight,
 } from "lucide-react";
 
 interface KB {

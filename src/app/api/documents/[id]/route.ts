@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents, chunks, knowledgeBases } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { documents, knowledgeBases } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { deleteR2Object } from "@/lib/r2";
 
 export const runtime = "nodejs";

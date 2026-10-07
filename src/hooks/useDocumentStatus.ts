@@ -9,6 +9,8 @@ interface DocStatus {
   errorMessage?: string | null;
 }
 
+const TERMINAL_STATUSES = new Set(["ready", "failed"]);
+
 /**
  * Polls /api/documents/[id]/status every 2s until status is terminal.
  * Max 60 attempts (~2 minutes) before giving up.
@@ -20,8 +22,10 @@ export function useDocumentStatus(
 ) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attemptsRef = useRef(0);
+  // Keep onUpdate in a ref so callers don't need to memoize it
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
   const MAX_ATTEMPTS = 60;
-  const TERMINAL_STATUSES = new Set(["ready", "failed"]);
 
   useEffect(() => {
     if (!documentId) return;
@@ -37,7 +41,7 @@ export function useDocumentStatus(
         const res = await fetch(`/api/documents/${documentId}/status`);
         if (!res.ok) return;
         const data: DocStatus = await res.json();
-        onUpdate(data);
+        onUpdateRef.current(data);
 
         if (TERMINAL_STATUSES.has(data.status)) {
           clearInterval(intervalRef.current!);

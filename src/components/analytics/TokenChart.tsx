@@ -21,7 +21,8 @@ interface TokenChartProps {
   data: DailyRow[];
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface TooltipProps { active?: boolean; label?: string; payload?: { value: number }[] }
+const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="glass border-white/10 rounded-lg px-3 py-2 text-xs space-y-1">

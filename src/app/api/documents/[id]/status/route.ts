@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
