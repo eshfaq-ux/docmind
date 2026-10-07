@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { conversations, messages, citations, usageEvents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { chatClient, CHAT_MODEL, estimateCostUsd } from "@/lib/ai/embed";
 import { embedQuery } from "@/lib/ai/embed";
 import { vectorSearch, bm25Search } from "@/lib/search/retrieval";
+import { kgSearch, kgKeywordSearch } from "@/lib/search/kg";
 import { rrf, computeConfidence } from "@/lib/search/rrf";
 import { chatRatelimit, loadHistory, appendMessage } from "@/lib/redis";
 import { z } from "zod";
@@ -32,20 +33,57 @@ STRICT RULES — follow every one:
 7. Be thorough and complete — write full sentences, not fragments.`;
 
 /**
+ * HyDE (Hypothetical Document Embeddings) query rewriting.
+ *
+ * Why: Questions and answers exist in different embedding spaces.
+ * "What is the termination notice period?" embeds very differently from
+ * "The termination notice period is 30 days." Generating a hypothetical
+ * answer and embedding that instead bridges the vocabulary gap between
+ * query and document text — the single highest-ROI retrieval improvement.
+ *
+ * The hypothetical answer is only used for vector embedding.
+ * The original query is still used for BM25 (keyword search needs real terms).
+ *
+ * Falls back to original query if the HyDE call fails — non-critical path.
+ */
+async function generateHyDE(message: string): Promise<{ text: string; used: boolean }> {
+  try {
+    const res = await chatClient.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Write a 2-3 sentence factual answer to the following question as if you had the relevant documents in front of you. Be specific and use domain-appropriate language. If the question is ambiguous, write what a correct answer would look like.",
+        },
+        { role: "user", content: message },
+      ],
+      max_tokens: 150,
+      temperature: 0.1,
+    });
+    const hydeText = res.choices[0]?.message?.content?.trim();
+    if (hydeText) return { text: hydeText, used: true };
+  } catch {
+    // Non-critical — fall back to original query silently
+  }
+  return { text: message, used: false };
+}
+
+/**
  * POST /api/chat
  *
- * SSE streaming chat endpoint.
- * All 4 SSE headers are required — missing any breaks streaming in nginx/Vercel.
+ * SSE streaming chat endpoint — HERALD-enhanced.
  *
  * Flow:
  *   1. Auth + rate limit
- *   2. Embed query
- *   3. Hybrid retrieval (vector + BM25) → RRF → top 5
- *   4. Compute confidence
- *   5. If confidence=none, refuse without calling LLM
- *   6. Build prompt with context + conversation history
- *   7. Stream gpt-4o-mini via SSE
- *   8. Persist message + citations + usage event (setImmediate)
+ *   2. HyDE query rewriting (embed hypothetical answer, not raw question)
+ *   3. Three-way parallel retrieval: KG + vector + BM25
+ *   4. Unified RRF merge (KG nodes get +0.15 boost)
+ *   5. Compute confidence
+ *   6. If confidence=none, refuse without calling LLM
+ *   7. Build prompt with context + conversation history
+ *   8. Stream response via SSE
+ *   9. Persist message + citations + usage + retrieval counts (setImmediate)
  */
 export async function POST(req: Request) {
   const session = await auth();
@@ -85,7 +123,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Knowledge base not found", code: "NOT_FOUND" }, { status: 404 });
   }
 
-  // Create conversation if not provided
+  // Create or verify conversation
   if (!conversationId) {
     const [conv] = await db
       .insert(conversations)
@@ -93,7 +131,6 @@ export async function POST(req: Request) {
       .returning({ id: conversations.id });
     conversationId = conv.id;
   } else {
-    // Verify conversation belongs to this user + tenant
     const conv = await db.query.conversations.findFirst({
       where: (c, { eq, and }) =>
         and(eq(c.id, conversationId!), eq(c.tenantId, tenantId), eq(c.userId, userId)),
@@ -104,25 +141,43 @@ export async function POST(req: Request) {
     }
   }
 
-  // Save user message
-  await db
-    .insert(messages)
-    .values({ conversationId, role: "user", content: message });
+  // Save user message before retrieval so it's persisted even if retrieval fails
+  await db.insert(messages).values({ conversationId, role: "user", content: message });
 
-  // ── Retrieval ──────────────────────────────────────────────────────────────
-  const queryEmbedding = await embedQuery(message);
+  // ── HERALD Retrieval ───────────────────────────────────────────────────────
 
-  const [vectorResults, bm25Results] = await Promise.allSettled([
-    vectorSearch(tenantId, kbId, queryEmbedding, topK * 4),
-    bm25Search(tenantId, kbId, message, topK * 4),
-  ]);
+  // Step 1: HyDE — embed hypothetical answer for better vector recall
+  // BM25 and KG keyword search still use the original query
+  const { text: hydeText, used: hydeUsed } = await generateHyDE(message);
+  const queryEmbedding = await embedQuery(hydeText);
 
-  const resultSets = [
-    vectorResults.status === "fulfilled" ? vectorResults.value : [],
-    bm25Results.status === "fulfilled" ? bm25Results.value : [],
-  ];
+  // Step 2: Three-way parallel retrieval
+  // KG search: structured knowledge nodes (Hot Layer)
+  // Vector search: cosine similarity on chunk embeddings (Cold Layer)
+  // BM25 search: keyword matching on stored tsvector (Cold Layer)
+  const [kgVectorResults, kgKeywordResults, vectorResults, bm25Results] =
+    await Promise.allSettled([
+      kgSearch(tenantId, kbId, queryEmbedding, topK * 2),
+      kgKeywordSearch(tenantId, kbId, message, topK),
+      vectorSearch(tenantId, kbId, queryEmbedding, topK * 4),
+      bm25Search(tenantId, kbId, message, topK * 4),
+    ]);
 
-  const mergedChunks = rrf(resultSets, topK);
+  // Step 3: Unified RRF merge with KG source boost
+  const mergedChunks = rrf(
+    [
+      kgVectorResults.status  === "fulfilled" ? kgVectorResults.value  : [],
+      kgKeywordResults.status === "fulfilled" ? kgKeywordResults.value : [],
+      vectorResults.status    === "fulfilled" ? vectorResults.value    : [],
+      bm25Results.status      === "fulfilled" ? bm25Results.value      : [],
+    ],
+    topK,
+    60,
+    { kg: 0.15, vector: 0, bm25: 0 }
+  );
+
+  const kgNodesUsed = mergedChunks.filter((c) => c.source === "kg").length;
+
   const { label: confidenceLabel, score: confidenceScore } = computeConfidence(mergedChunks);
 
   // ── Refuse if no meaningful context ───────────────────────────────────────
@@ -141,13 +196,20 @@ export async function POST(req: Request) {
       completionTokens: 0,
     });
 
-    // SSE-encoded refusal
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ type: "meta", conversationId, confidence: "none", score: 0, citations: [] })}\n\n`
+            `data: ${JSON.stringify({
+              type: "meta",
+              conversationId,
+              confidence: "none",
+              score: 0,
+              citations: [],
+              kgNodesUsed: 0,
+              hydeUsed,
+            })}\n\n`
           )
         );
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content: refusalText })}\n\n`));
@@ -192,12 +254,23 @@ export async function POST(req: Request) {
     pageNumber: c.pageNumber,
     excerpt: c.content.slice(0, 200),
     score: c.score,
+    source: c.source,
   }));
 
   const encoder = new TextEncoder();
   let fullContent = "";
   let promptTokens = 0;
   let completionTokens = 0;
+
+  // Collect chunk ids to increment retrieval counts (KG nodes excluded —
+  // they have their own retrieval_count column updated separately)
+  const rawChunkIds = mergedChunks
+    .filter((c) => c.source !== "kg" && c.chunkIndex >= 0)
+    .map((c) => c.id);
+
+  const kgNodeIds = mergedChunks
+    .filter((c) => c.source === "kg")
+    .map((c) => c.id);
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -206,7 +279,7 @@ export async function POST(req: Request) {
       }, 15000);
 
       try {
-        // Send metadata first (conversationId, confidence, citations)
+        // Send metadata first — conversationId, confidence, citations, HERALD signals
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({
@@ -215,6 +288,8 @@ export async function POST(req: Request) {
               confidence: confidenceLabel,
               score: confidenceScore,
               citations: citationData,
+              kgNodesUsed,
+              hydeUsed,
             })}\n\n`
           )
         );
@@ -228,8 +303,6 @@ export async function POST(req: Request) {
         });
 
         // Buffer reasoning silently — only emit if no content tokens ever arrive.
-        // Some models (e.g. DeepSeek-R1) emit a reasoning field first, then content.
-        // Streaming reasoning as content produces the "thinking monologue" artifact.
         let hasContentTokens = false;
         let reasoningBuffer = "";
 
@@ -245,7 +318,6 @@ export async function POST(req: Request) {
               encoder.encode(`data: ${JSON.stringify({ type: "text", content })}\n\n`)
             );
           } else if (reasoning) {
-            // Always buffer reasoning — never stream it directly
             reasoningBuffer += reasoning;
           }
 
@@ -255,7 +327,7 @@ export async function POST(req: Request) {
           }
         }
 
-        // Reasoning-only model fallback: no content tokens arrived, use reasoning as answer
+        // Reasoning-only model fallback
         if (!hasContentTokens && reasoningBuffer) {
           fullContent = reasoningBuffer;
           controller.enqueue(
@@ -264,22 +336,22 @@ export async function POST(req: Request) {
         }
 
         if (!fullContent.trim()) {
-          // Log server-side only — never expose to client
           console.warn("[chat] WARNING: fullContent is empty after stream");
         }
+
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (err) {
-        // Log the real error server-side for debugging
         console.error("[chat] stream error:", err instanceof Error ? err.message : err);
-        // Send a generic message to the client — never leak internal error details
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "error", message: "An error occurred while generating the response. Please try again." })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "error", message: "An error occurred while generating the response. Please try again." })}\n\n`
+          )
         );
       } finally {
         clearInterval(heartbeat);
         controller.close();
 
-        // Persist asynchronously — don't block the response
+        // ── Persist asynchronously — don't block the response ────────────────
         setImmediate(async () => {
           const latencyMs = Date.now() - startTime;
           const costUsd = estimateCostUsd(CHAT_MODEL, promptTokens, completionTokens);
@@ -298,7 +370,7 @@ export async function POST(req: Request) {
             })
             .returning({ id: messages.id });
 
-          // Insert citations
+          // Insert citations (include source field for KG tracking)
           if (citationData.length > 0) {
             await db.insert(citations).values(
               citationData.map((c) => ({
@@ -314,7 +386,7 @@ export async function POST(req: Request) {
             );
           }
 
-          // Track usage
+          // Track usage event
           await db.insert(usageEvents).values({
             tenantId,
             userId,
@@ -326,6 +398,26 @@ export async function POST(req: Request) {
             costUsd: String(costUsd),
             kbId,
           });
+
+          // ── HERALD: increment retrieval counts ──────────────────────────────
+          // Raw chunks: increment chunks.retrieval_count
+          if (rawChunkIds.length > 0) {
+            await db.execute(sql`
+              UPDATE chunks
+              SET retrieval_count    = retrieval_count + 1,
+                  last_retrieved_at  = NOW()
+              WHERE id = ANY(ARRAY[${sql.join(rawChunkIds.map(id => sql`${id}::uuid`), sql`, `)}])
+            `);
+          }
+
+          // KG nodes: increment kg_nodes.retrieval_count
+          if (kgNodeIds.length > 0) {
+            await db.execute(sql`
+              UPDATE kg_nodes
+              SET retrieval_count = retrieval_count + 1
+              WHERE id = ANY(ARRAY[${sql.join(kgNodeIds.map(id => sql`${id}::uuid`), sql`, `)}])
+            `);
+          }
 
           // Update Redis conversation history
           await appendMessage(tenantId, conversationId!, { role: "user", content: message });
@@ -340,7 +432,6 @@ export async function POST(req: Request) {
           const updates: Record<string, unknown> = { lastActive: new Date() };
 
           if (!conv?.title) {
-            // Generate a short title from the first user message (≤6 words)
             try {
               const titleRes = await chatClient.chat.completions.create({
                 model: CHAT_MODEL,
@@ -376,7 +467,7 @@ export async function POST(req: Request) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "X-Accel-Buffering": "no", // Required — prevents nginx/Vercel from buffering
+      "X-Accel-Buffering": "no",
     },
   });
 }

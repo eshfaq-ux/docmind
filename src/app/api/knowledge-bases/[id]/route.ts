@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { knowledgeBases } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -20,7 +20,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const kb = await getKB(params.id, session.user.tenantId);
   if (!kb) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json(kb);
+  // Sum node_count across all documents in this KB
+  const nodeCountResult = await db.execute(sql`
+    SELECT COALESCE(SUM(node_count), 0) AS total
+    FROM documents
+    WHERE kb_id = ${params.id}::uuid
+      AND tenant_id = ${session.user.tenantId}::uuid
+  `);
+  const rows = ((nodeCountResult as unknown) as { rows: Record<string, unknown>[] }).rows;
+  const nodeCount = Number(rows[0]?.total ?? 0);
+
+  return NextResponse.json({ ...kb, nodeCount });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

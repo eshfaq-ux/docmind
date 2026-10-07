@@ -8,7 +8,7 @@ import { DocumentList } from "@/components/documents/DocumentList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, MessageSquare, BookOpen, FileText, Layers } from "lucide-react";
+import { ArrowLeft, MessageSquare, BookOpen, FileText, Layers, Brain } from "lucide-react";
 
 interface KB {
   id: string;
@@ -16,6 +16,7 @@ interface KB {
   description?: string;
   docCount: number;
   chunkCount: number;
+  nodeCount?: number;
 }
 
 export default function KBDetailPage() {
@@ -87,6 +88,15 @@ export default function KBDetailPage() {
               <span className="font-semibold text-foreground/90">{kb.chunkCount.toLocaleString()}</span>
               <span>chunks indexed</span>
             </div>
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <Link
+              href={`/kb/${kbId}/graph`}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-violet-400 transition-colors duration-150"
+            >
+              <Brain className="w-3.5 h-3.5 opacity-60" />
+              <span className="font-semibold text-foreground/90">{kb.nodeCount ?? 0}</span>
+              <span>knowledge nodes</span>
+            </Link>
           </div>
         )}
       </div>

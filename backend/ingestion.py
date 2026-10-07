@@ -23,6 +23,7 @@ Idempotency:
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import uuid
@@ -246,6 +247,13 @@ async def ingest_document(document_id: str) -> None:
             "ingest: completed doc=%s chunks=%d tokens=%d cost=$%.6f",
             doc_id, new_chunk_count, total_tokens, cost_usd,
         )
+
+    # ── Step 9: Trigger HERALD distillation (non-blocking) ────────────────────
+    # Runs as a fire-and-forget task — failure never affects document availability.
+    # Document remains in 'ready' status from the pipeline above; distiller
+    # transitions it to 'distilling' then 'distilled' independently.
+    from distiller import distill_document as _distill  # local import avoids circular
+    asyncio.create_task(_distill(doc_id, tenant_id, kb_id, chunks))
 
 
 # ── R2 download ────────────────────────────────────────────────────────────────

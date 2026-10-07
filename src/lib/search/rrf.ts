@@ -13,18 +13,26 @@ import type { RetrievedChunk } from "./retrieval";
  *
  * k=60 is the standard RRF constant (from the original Cormack et al. paper).
  * Increasing k smooths rank differences; decreasing k amplifies them.
+ *
+ * sourceBoosts: optional per-source additive bonus applied to the RRF score.
+ * Used by HERALD to give KG nodes a small boost over raw chunks when relevance
+ * is comparable — KG nodes are pre-validated, structured, and deduplicated,
+ * so they are preferred over raw chunk text when scores are close.
+ * Default boost for "kg" source is +0.15; vector and bm25 get 0.
  */
 export function rrf(
   resultSets: RetrievedChunk[][],
   topK = 5,
-  k = 60
+  k = 60,
+  sourceBoosts: Record<string, number> = { kg: 0.15, vector: 0, bm25: 0 }
 ): RetrievedChunk[] {
   // Map: chunkId → { chunk, rrfScore }
   const scores = new Map<string, { chunk: RetrievedChunk; rrfScore: number }>();
 
   for (const results of resultSets) {
     results.forEach((chunk, rank) => {
-      const contribution = 1 / (k + rank + 1);
+      const boost = sourceBoosts[chunk.source] ?? 0;
+      const contribution = 1 / (k + rank + 1) + boost;
       const existing = scores.get(chunk.id);
       if (existing) {
         existing.rrfScore += contribution;
@@ -47,14 +55,14 @@ export function rrf(
 /**
  * Confidence label based on top retrieval score.
  *
- * These thresholds are based on cosine similarity with text-embedding-3-small:
- *   >0.7  → the retrieved chunk is highly relevant to the query
+ * These thresholds are calibrated for nomic-embed-text (768-dim, cosine):
+ *   ≥0.7  → the retrieved chunk is highly relevant to the query
  *   0.5–0.7 → moderately relevant
  *   0.3–0.5 → weakly relevant (answer may be imprecise)
  *   <0.3  → no meaningful match — refuse to answer
  *
- * We also factor in the number of supporting chunks: if only 1 chunk
- * supports an answer (even at high similarity), cap at 'medium'.
+ * KG nodes always have confidence ≥ 0.85 (set at distillation time) so they
+ * naturally pass the 0.3 gate. The supporting-chunk count cap still applies.
  */
 export function computeConfidence(
   chunks: RetrievedChunk[]

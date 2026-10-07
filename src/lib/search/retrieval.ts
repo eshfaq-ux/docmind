@@ -9,7 +9,7 @@ export interface RetrievedChunk {
   pageNumber: number | null;
   chunkIndex: number;
   score: number;
-  source: "vector" | "bm25";
+  source: "vector" | "bm25" | "kg";
 }
 
 /**
@@ -71,6 +71,13 @@ export async function vectorSearch(
  * Why ts_rank_cd over ts_rank? ts_rank_cd uses cover density ranking
  * which weights terms appearing close together more heavily — better
  * for factual Q&A where proximity of answer tokens matters.
+ *
+ * Uses the stored content_tsv generated column (added in migration 0002)
+ * instead of computing to_tsvector() at query time — avoids full recompute
+ * on every row scan and allows the GIN index to be used.
+ *
+ * websearch_to_tsquery instead of plainto_tsquery: handles quoted phrases
+ * ("machine learning") and OR operators, meaningfully better for technical Q&A.
  */
 export async function bm25Search(
   tenantId: string,
@@ -78,8 +85,6 @@ export async function bm25Search(
   query: string,
   topK = 20
 ): Promise<RetrievedChunk[]> {
-  // plainto_tsquery is safer than to_tsquery for user input:
-  // it handles arbitrary text without crashing on operators like '&', '|'
   const rows = await db.execute(sql`
     SELECT
       c.id,
@@ -89,17 +94,16 @@ export async function bm25Search(
       c.page_number,
       c.chunk_index,
       ts_rank_cd(
-        to_tsvector('english', c.content),
-        plainto_tsquery('english', ${query})
+        c.content_tsv,
+        websearch_to_tsquery('english', ${query})
       ) AS score
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
     WHERE
       c.tenant_id = ${tenantId}::uuid
       AND c.kb_id   = ${kbId}::uuid
-      AND to_tsvector('english', c.content)
-          @@ plainto_tsquery('english', ${query})
-      AND d.status = 'ready'
+      AND c.content_tsv @@ websearch_to_tsquery('english', ${query})
+      AND d.status IN ('ready', 'distilling', 'distilled')
     ORDER BY score DESC
     LIMIT ${topK}
   `);
