@@ -14,7 +14,6 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   const publicPaths = [
-    "/",
     "/login",
     "/register",
     "/verify-email",
@@ -22,7 +21,10 @@ export default auth((req) => {
     "/api/health",
   ];
 
-  const isPublic = publicPaths.some((p) => pathname.startsWith(p));
+  // Root "/" is an exact match; all other public paths use prefix matching.
+  const isPublic =
+    pathname === "/" ||
+    publicPaths.some((p) => pathname.startsWith(p));
 
   if (!isPublic && !req.auth) {
     const loginUrl = new URL("/login", req.url);

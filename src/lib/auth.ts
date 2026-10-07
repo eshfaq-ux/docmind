@@ -61,7 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         // First sign-in: attach tenantId + role to JWT
         token.sub = user.id;
@@ -69,8 +69,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as { role?: string }).role;
       }
 
-      // For Google OAuth users: lookup/create tenant on first sign-in
-      if (trigger === "signIn" && !token.tenantId) {
+      // For Google OAuth users: populate tenantId on the JWT when it is missing.
+      // NextAuth v5 beta does not reliably set trigger="signIn" during the OAuth
+      // token callback, so gate on !token.tenantId && token.email instead.
+      if (!token.tenantId && token.email) {
         const dbUser = await db.query.users.findFirst({
           where: eq(users.email, token.email!),
         });

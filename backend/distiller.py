@@ -58,8 +58,10 @@ def _make_llm_client() -> AsyncOpenAI:
 
 _llm = _make_llm_client()
 
+import os
+
 # ── Ollama embedding URL (same as embedder.py) ────────────────────────────────
-_OLLAMA_URL = "http://localhost:11434/api/embeddings"
+_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/embeddings")
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
@@ -159,55 +161,65 @@ async def _run_distillation(
         )
         await session.commit()
 
-    # ── Step 1: Sample representative chunks ──────────────────────────────────
-    sample = _select_representative_chunks(chunks, settings.herald_distill_max_chunks)
-    logger.info("distill: sampled %d/%d chunks", len(sample), len(chunks))
+    try:
+        # ── Step 1: Sample representative chunks ──────────────────────────────────
+        sample = _select_representative_chunks(chunks, settings.herald_distill_max_chunks)
+        logger.info("distill: sampled %d/%d chunks", len(sample), len(chunks))
 
-    # ── Step 2: Extract concepts from each chunk ──────────────────────────────
-    all_drafts: list[KGNodeDraft] = []
-    for chunk in sample:
-        drafts = await _extract_concepts(chunk)
-        all_drafts.extend(drafts)
+        # ── Step 2: Extract concepts from each chunk ──────────────────────────────
+        all_drafts: list[KGNodeDraft] = []
+        for chunk in sample:
+            drafts = await _extract_concepts(chunk)
+            all_drafts.extend(drafts)
 
-    logger.info("distill: extracted %d raw concepts", len(all_drafts))
+        logger.info("distill: extracted %d raw concepts", len(all_drafts))
 
-    if not all_drafts:
-        await _finalize_document(doc_id, 0, "", [], "other")
-        return
+        if not all_drafts:
+            await _finalize_document(doc_id, 0, "", [], "other")
+            return
 
-    # ── Step 3: Deduplicate against existing KB nodes ─────────────────────────
-    async with AsyncSessionLocal() as session:
-        unique_drafts = await _deduplicate_drafts(all_drafts, kb_id, tenant_id, session)
-
-    logger.info("distill: %d unique concepts after dedup", len(unique_drafts))
-
-    if not unique_drafts:
-        await _finalize_document(doc_id, 0, "", [], "other")
-        return
-
-    # ── Step 4: Embed node descriptions ──────────────────────────────────────
-    unique_drafts = await _embed_drafts(unique_drafts)
-
-    # ── Step 5: Insert nodes and edges ───────────────────────────────────────
-    async with AsyncSessionLocal() as session:
-        node_ids = await _insert_nodes(unique_drafts, doc_id, tenant_id, kb_id, session)
-        await _insert_edges(unique_drafts, node_ids, tenant_id, kb_id, session)
-
-    logger.info("distill: inserted %d nodes", len(node_ids))
-
-    # ── Step 6: Contradiction detection ──────────────────────────────────────
-    if settings.herald_contradiction_check and unique_drafts:
+        # ── Step 3: Deduplicate against existing KB nodes ─────────────────────────
         async with AsyncSessionLocal() as session:
-            await _detect_contradictions(unique_drafts, kb_id, tenant_id, session)
+            unique_drafts = await _deduplicate_drafts(all_drafts, kb_id, tenant_id, session)
 
-    # ── Step 7: Document-level metadata ──────────────────────────────────────
-    # Use first chunk as representative sample for summary/classification
-    sample_text = " ".join(c.content[:500] for c in sample[:5])
-    summary, tags, doc_type = await _extract_doc_metadata(sample_text)
+        logger.info("distill: %d unique concepts after dedup", len(unique_drafts))
 
-    # ── Step 8: Finalize document ─────────────────────────────────────────────
-    await _finalize_document(doc_id, len(node_ids), summary, tags, doc_type)
-    logger.info("distill: completed doc=%s nodes=%d", doc_id, len(node_ids))
+        if not unique_drafts:
+            await _finalize_document(doc_id, 0, "", [], "other")
+            return
+
+        # ── Step 4: Embed node descriptions ──────────────────────────────────────
+        unique_drafts = await _embed_drafts(unique_drafts)
+
+        # ── Step 5: Insert nodes and edges ───────────────────────────────────────
+        async with AsyncSessionLocal() as session:
+            node_ids = await _insert_nodes(unique_drafts, doc_id, tenant_id, kb_id, session)
+            await _insert_edges(unique_drafts, node_ids, tenant_id, kb_id, session)
+
+        logger.info("distill: inserted %d nodes", len(node_ids))
+
+        # ── Step 6: Contradiction detection ──────────────────────────────────────
+        if settings.herald_contradiction_check and unique_drafts:
+            async with AsyncSessionLocal() as session:
+                await _detect_contradictions(unique_drafts, kb_id, tenant_id, session)
+
+        # ── Step 7: Document-level metadata ──────────────────────────────────────
+        # Use first chunk as representative sample for summary/classification
+        sample_text = " ".join(c.content[:500] for c in sample[:5])
+        summary, tags, doc_type = await _extract_doc_metadata(sample_text)
+
+        # ── Step 8: Finalize document ─────────────────────────────────────────────
+        await _finalize_document(doc_id, len(node_ids), summary, tags, doc_type)
+        logger.info("distill: completed doc=%s nodes=%d", doc_id, len(node_ids))
+
+    except Exception:
+        logger.exception("distill: failed for doc=%s — rolling back to 'ready'", doc_id)
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                text("UPDATE documents SET status = 'ready' WHERE id = :id"),
+                {"id": doc_id},
+            )
+            await session.commit()
 
 
 # ── Chunk sampling ─────────────────────────────────────────────────────────────

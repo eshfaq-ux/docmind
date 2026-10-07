@@ -21,6 +21,8 @@ interface SSEMeta {
   confidence: "high" | "medium" | "low" | "none";
   score: number;
   citations: Citation[];
+  kgNodesUsed?: number;
+  hydeUsed?: boolean;
 }
 
 const STARTERS = [
@@ -272,6 +274,8 @@ export function ChatWindow({ kbId, kbName, initialConversationId }: ChatWindowPr
                   streaming: false,
                   confidence: meta?.confidence,
                   citations: meta?.citations ?? [],
+                  kgNodesUsed: meta?.kgNodesUsed,
+                  hydeUsed: meta?.hydeUsed,
                 }
               : m
           )

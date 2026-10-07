@@ -9,12 +9,19 @@ interface DocStatus {
   errorMessage?: string | null;
 }
 
-const TERMINAL_STATUSES = new Set(["ready", "failed"]);
+const TERMINAL_STATUSES = new Set(["distilled", "failed"]);
 
 /**
  * Polls /api/documents/[id]/status every 2s until status is terminal.
  * Max 60 attempts (~2 minutes) before giving up.
  * Calls onUpdate whenever status changes.
+ *
+ * Terminal statuses: "distilled" (HERALD enabled) or "failed".
+ * NOTE: "ready" is intentionally NOT terminal here — HERALD distillation
+ * runs asynchronously after "ready", transitioning to "distilling" then
+ * "distilled". Polling continues through "ready" so the UI tracks the
+ * full lifecycle. The 60-attempt (~2 min) ceiling prevents infinite loops
+ * for deployments where HERALD is disabled and the doc stays at "ready".
  */
 export function useDocumentStatus(
   documentId: string | null,

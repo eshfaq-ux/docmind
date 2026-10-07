@@ -22,6 +22,7 @@ ENV NODE_ENV=production
 # Copy only what Next.js standalone output needs
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+# public/ may be empty but must exist for Next.js standalone server
 COPY --from=builder /app/public ./public
 
 EXPOSE 3000

@@ -18,8 +18,10 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1).optional().default(""),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional().default(""),
 
-  // OpenAI (embeddings only)
-  OPENAI_API_KEY: z.string().min(1),
+  // OpenAI — required only when not using OpenRouter + Ollama exclusively.
+  // Optional here so local-only setups (Ollama embed + OpenRouter chat) can start
+  // without a key. Code in embed.ts gracefully handles a missing key at call time.
+  OPENAI_API_KEY: z.string().min(1).optional().default(""),
 
   // OpenRouter (chat completions — optional, falls back to OpenAI if not set)
   OPENROUTER_API_KEY: z.string().min(1).optional(),

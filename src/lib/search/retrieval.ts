@@ -44,7 +44,7 @@ export async function vectorSearch(
       c.tenant_id = ${tenantId}::uuid
       AND c.kb_id   = ${kbId}::uuid
       AND c.embedding IS NOT NULL
-      AND d.status = 'ready'
+      AND d.status IN ('ready', 'distilling', 'distilled')
     ORDER BY c.embedding <=> ${embeddingLiteral}::vector
     LIMIT ${topK}
   `);

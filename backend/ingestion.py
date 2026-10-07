@@ -252,8 +252,9 @@ async def ingest_document(document_id: str) -> None:
     # Runs as a fire-and-forget task — failure never affects document availability.
     # Document remains in 'ready' status from the pipeline above; distiller
     # transitions it to 'distilling' then 'distilled' independently.
-    from distiller import distill_document as _distill  # local import avoids circular
-    asyncio.create_task(_distill(doc_id, tenant_id, kb_id, chunks))
+    if settings.herald_enabled:
+        from distiller import distill_document as _distill  # local import avoids circular
+        asyncio.create_task(_distill(doc_id, tenant_id, kb_id, chunks))
 
 
 # ── R2 download ────────────────────────────────────────────────────────────────

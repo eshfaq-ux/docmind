@@ -11,6 +11,34 @@
 -- (similarity() function used to detect near-duplicate KG node titles)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+-- ─── Fix: chunks.embedding dimension ─────────────────────────────────────────
+-- 0001_initial.sql provisions chunks.embedding as vector(1536) (OpenAI default).
+-- This project uses Ollama nomic-embed-text which produces 768-dim vectors.
+-- Correct the dimension so fresh setups match the running configuration.
+-- On an existing DB with no chunk data this is a safe no-op type change.
+-- On an existing DB with 1536-dim vectors this will fail — in that case
+-- re-embed all chunks after altering (or skip if already using 768-dim).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'chunks'
+      AND column_name = 'embedding'
+      AND udt_name = 'vector'
+  ) THEN
+    -- Only alter if the dimension is wrong (1536 → 768)
+    -- pg_attribute.atttypmod encodes vector dimensions as the raw dimension value
+    -- (e.g. vector(1536) → atttypmod=1536, vector(768) → atttypmod=768)
+    IF (
+      SELECT atttypmod FROM pg_attribute
+      WHERE attrelid = 'chunks'::regclass
+        AND attname = 'embedding'
+    ) = 1536 THEN
+      ALTER TABLE chunks ALTER COLUMN embedding TYPE vector(768);
+    END IF;
+  END IF;
+END $$;
+
 -- ─── Modify: chunks ───────────────────────────────────────────────────────────
 
 -- Track how often each chunk is retrieved across all queries.

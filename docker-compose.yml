@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─── DocMind local development stack ─────────────────────────────────────────
 #
 # Services:
@@ -32,8 +30,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Auto-run migrations on first start
+      # Auto-run migrations on first start (alphabetical order)
       - ./drizzle/0001_initial.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./drizzle/0002_herald.sql:/docker-entrypoint-initdb.d/02_herald.sql:ro
+      - ./drizzle/0003_fixes.sql:/docker-entrypoint-initdb.d/03_fixes.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U docmind -d docmind"]
       interval: 5s
@@ -41,12 +41,19 @@ services:
       retries: 10
 
   # ── Redis 7 ───────────────────────────────────────────────────────────────
+  # NOTE: This TCP Redis container is for local backend development only
+  # (e.g. manual inspection, future direct-Redis usage).
+  # The Next.js app uses @upstash/redis which requires an HTTP REST endpoint
+  # (UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN). Point those env vars
+  # at a free Upstash database (https://upstash.com) — this container does NOT
+  # satisfy that requirement and is not connected to the Next.js service.
+  #
+  # No host port binding — avoids conflicts with any local Redis on 6379.
+  # To inspect manually: docker compose exec redis redis-cli
   redis:
     image: redis:7-alpine
     container_name: docmind-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -73,7 +80,7 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -99,7 +106,7 @@ services:
       # for local redis you'd need @upstash/redis with REST adapter pointed at redis
       # Simplest: keep using Upstash cloud even locally for Redis
     ports:
-      - "3000:3000"
+      - "3001:3000"
 
 volumes:
   postgres_data:

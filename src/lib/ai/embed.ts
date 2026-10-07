@@ -22,7 +22,8 @@ export const CHAT_MODEL = env.OPENROUTER_API_KEY
   ? "openrouter/auto"
   : "gpt-4o-mini";
 
-const OLLAMA_URL = "http://localhost:11434/api/embeddings";
+const OLLAMA_URL =
+  process.env.OLLAMA_URL ?? "http://localhost:11434/api/embeddings";
 
 // Pricing per 1M tokens (USD)
 const PRICING: Record<string, { input: number; output: number }> = {

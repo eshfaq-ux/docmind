@@ -1,15 +1,25 @@
-import { Loader2, CheckCircle2, XCircle, Clock, Cpu, Zap } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Clock, Cpu, Zap, Brain, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Status = "pending" | "processing" | "parsed" | "embedding" | "ready" | "failed";
+type Status =
+  | "pending"
+  | "processing"
+  | "parsed"
+  | "embedding"
+  | "ready"
+  | "distilling"
+  | "distilled"
+  | "failed";
 
 const CONFIG: Record<Status, { label: string; cls: string; icon: React.ReactNode }> = {
-  pending:    { label: "Pending",    cls: "text-slate-400  bg-slate-500/10  border-slate-500/20",  icon: <Clock     className="w-3 h-3" /> },
-  processing: { label: "Parsing",   cls: "text-amber-400  bg-amber-500/10  border-amber-500/20",  icon: <Loader2   className="w-3 h-3 animate-spin" /> },
-  parsed:     { label: "Parsed",    cls: "text-sky-400    bg-sky-500/10    border-sky-500/20",    icon: <Zap       className="w-3 h-3" /> },
-  embedding:  { label: "Embedding", cls: "text-violet-400 bg-violet-500/10 border-violet-500/20", icon: <Cpu       className="w-3 h-3 animate-pulse" /> },
+  pending:    { label: "Pending",    cls: "text-slate-400   bg-slate-500/10   border-slate-500/20",   icon: <Clock      className="w-3 h-3" /> },
+  processing: { label: "Parsing",   cls: "text-amber-400   bg-amber-500/10   border-amber-500/20",   icon: <Loader2    className="w-3 h-3 animate-spin" /> },
+  parsed:     { label: "Parsed",    cls: "text-sky-400     bg-sky-500/10     border-sky-500/20",     icon: <Zap        className="w-3 h-3" /> },
+  embedding:  { label: "Embedding", cls: "text-violet-400  bg-violet-500/10  border-violet-500/20",  icon: <Cpu        className="w-3 h-3 animate-pulse" /> },
   ready:      { label: "Ready",     cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", icon: <CheckCircle2 className="w-3 h-3" /> },
-  failed:     { label: "Failed",    cls: "text-rose-400   bg-rose-500/10   border-rose-500/20",   icon: <XCircle   className="w-3 h-3" /> },
+  distilling: { label: "Distilling",cls: "text-purple-400  bg-purple-500/10  border-purple-500/20",  icon: <Brain      className="w-3 h-3 animate-pulse" /> },
+  distilled:  { label: "Distilled", cls: "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20", icon: <Sparkles   className="w-3 h-3" /> },
+  failed:     { label: "Failed",    cls: "text-rose-400    bg-rose-500/10    border-rose-500/20",    icon: <XCircle    className="w-3 h-3" /> },
 };
 
 export function StatusBadge({ status }: { status: string }) {

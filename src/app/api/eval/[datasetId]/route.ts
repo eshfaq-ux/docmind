@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { evalDatasets, evalRuns, evalResults, usageEvents } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { openai, CHAT_MODEL, estimateCostUsd, embedQuery } from "@/lib/ai/embed";
+import { chatClient, CHAT_MODEL, estimateCostUsd, embedQuery } from "@/lib/ai/embed";
 import { vectorSearch, bm25Search } from "@/lib/search/retrieval";
 import { rrf } from "@/lib/search/rrf";
 
@@ -102,8 +102,8 @@ Be strict: if the chunk does not contain the information in the sentence, return
         .map((c, i) => `[${i + 1}] ${c.docName}:\n${c.content}`)
         .join("\n\n---\n\n");
 
-      // Generate answer
-      const answerRes = await openai.chat.completions.create({
+      // Generate answer — use chatClient so OpenRouter configs work correctly
+      const answerRes = await chatClient.chat.completions.create({
         model: CHAT_MODEL,
         messages: [
           { role: "system", content: "Answer using ONLY the provided context. Cite sources with [N]. If insufficient context, say so." },
@@ -117,8 +117,8 @@ Be strict: if the chunk does not contain the information in the sentence, return
       totalCompletionTokens += answerRes.usage?.completion_tokens ?? 0;
 
       // LLM-as-judge: faithfulness + answer_relevance + retrieval_relevance
-      const judgeRes = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+      const judgeRes = await chatClient.chat.completions.create({
+        model: CHAT_MODEL,
         messages: [
           { role: "system", content: JUDGE_PROMPT },
           {
@@ -254,8 +254,8 @@ async function _scoreCitationAccuracy(
   let supported = 0;
   for (const { sentence, chunkContent } of toEval) {
     try {
-      const res = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+      const res = await chatClient.chat.completions.create({
+        model: CHAT_MODEL,
         messages: [
           { role: "system", content: judgePrompt },
           { role: "user", content: `Sentence: "${sentence}"\n\nSource chunk: "${chunkContent.slice(0, 600)}"` },

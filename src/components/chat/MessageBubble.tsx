@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Bot, User, FileText, Info, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Bot, User, FileText, Info, Copy, Check, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -20,6 +20,8 @@ export interface Message {
   content: string;
   confidence?: "high" | "medium" | "low" | "none";
   citations?: Citation[];
+  kgNodesUsed?: number;
+  hydeUsed?: boolean;
   streaming?: boolean;
   createdAt?: string;
 }
@@ -439,9 +441,18 @@ export function MessageBubble({ message }: { message: Message }) {
           <SourcesPanel citations={citations} />
         )}
 
-        {/* Footer row: confidence + copy */}
+        {/* Footer row: HERALD signals + confidence + copy */}
         {!isUser && !message.streaming && (
-          <div className="flex items-center gap-3 px-0.5">
+          <div className="flex items-center gap-3 px-0.5 flex-wrap">
+            {message.kgNodesUsed != null && message.kgNodesUsed > 0 && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20"
+                title={`${message.kgNodesUsed} knowledge graph node${message.kgNodesUsed !== 1 ? "s" : ""} used`}
+              >
+                <Sparkles className="w-2.5 h-2.5" aria-hidden="true" />
+                Knowledge Graph
+              </span>
+            )}
             {message.confidence && (
               <ConfidenceBadge confidence={message.confidence} />
             )}

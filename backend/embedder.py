@@ -8,11 +8,13 @@ Model: ollama pull nomic-embed-text
 from __future__ import annotations
 
 import asyncio
+import os
+
 import httpx
 
 from config import settings
 
-OLLAMA_URL  = "http://localhost:11434/api/embeddings"
+OLLAMA_URL  = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/embeddings")
 EMBED_MODEL = "nomic-embed-text"
 EMBED_DIMS  = 768
 

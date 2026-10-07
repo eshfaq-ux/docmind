@@ -370,10 +370,15 @@ export async function POST(req: Request) {
             })
             .returning({ id: messages.id });
 
-          // Insert citations (include source field for KG tracking)
-          if (citationData.length > 0) {
+          // Insert citations — KG node citations (source === "kg") carry a
+          // kg_nodes.id as chunkId which has no row in chunks, so they must be
+          // excluded to avoid FK violations on citations_chunk_id_chunks_id_fk.
+          const chunkCitations = citationData.filter(
+            (c) => c.source !== "kg" && c.chunkId && c.documentId
+          );
+          if (chunkCitations.length > 0) {
             await db.insert(citations).values(
-              citationData.map((c) => ({
+              chunkCitations.map((c) => ({
                 messageId: assistantMsg.id,
                 chunkId: c.chunkId,
                 documentId: c.documentId,
